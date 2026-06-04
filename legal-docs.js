@@ -6,37 +6,37 @@ const shared = {
     back: "Back to PIC Check AI",
     updated: "Last updated: June 3, 2026",
     contact: "Contact",
-    contactBody: "For support or legal questions, contact viva.sw.1911@gmail.com or Telegram @movewannamove."
+    contactBody: "For support or legal questions, contact johnlahboo@gmail.com or Telegram @movewannamove."
   },
   vi: {
     back: "Quay lại PIC Check AI",
     updated: "Cập nhật lần cuối: 03/06/2026",
     contact: "Liên hệ",
-    contactBody: "Để được hỗ trợ hoặc gửi thông báo pháp lý, liên hệ viva.sw.1911@gmail.com hoặc Telegram @movewannamove."
+    contactBody: "Để được hỗ trợ hoặc gửi thông báo pháp lý, liên hệ johnlahboo@gmail.com hoặc Telegram @movewannamove."
   },
   zh: {
     back: "返回 PIC Check AI",
     updated: "最后更新：2026年6月3日",
     contact: "联系",
-    contactBody: "如需支持或法律咨询，请联系 viva.sw.1911@gmail.com 或 Telegram @movewannamove。"
+    contactBody: "如需支持或法律咨询，请联系 johnlahboo@gmail.com 或 Telegram @movewannamove。"
   },
   hi: {
     back: "PIC Check AI पर वापस जाएं",
     updated: "अंतिम अपडेट: 3 जून 2026",
     contact: "संपर्क",
-    contactBody: "Support या legal questions के लिए viva.sw.1911@gmail.com या Telegram @movewannamove पर संपर्क करें।"
+    contactBody: "Support या legal questions के लिए johnlahboo@gmail.com या Telegram @movewannamove पर संपर्क करें।"
   },
   es: {
     back: "Volver a PIC Check AI",
     updated: "Última actualización: 3 de junio de 2026",
     contact: "Contacto",
-    contactBody: "Para soporte o consultas legales, contacta a viva.sw.1911@gmail.com o Telegram @movewannamove."
+    contactBody: "Para soporte o consultas legales, contacta a johnlahboo@gmail.com o Telegram @movewannamove."
   },
   ar: {
     back: "العودة إلى PIC Check AI",
     updated: "آخر تحديث: 3 يونيو 2026",
     contact: "التواصل",
-    contactBody: "للدعم أو الأسئلة القانونية، تواصل عبر viva.sw.1911@gmail.com أو Telegram @movewannamove."
+    contactBody: "للدعم أو الأسئلة القانونية، تواصل عبر johnlahboo@gmail.com أو Telegram @movewannamove."
   }
 };
 

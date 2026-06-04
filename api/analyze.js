@@ -91,12 +91,43 @@ async function analyzeWithProviders(imagePayload, filename) {
   const limitedProviders = providersTried.filter((item) => item.status === "failed" && isLimitReason(item.reason));
   const attemptedProviders = providersTried.filter((item) => item.status === "failed");
   const allAttemptedLimited = attemptedProviders.length > 0 && attemptedProviders.length === limitedProviders.length;
+
+  if (limitedProviders.length) {
+    logProviderQuotaLimit({
+      filename,
+      allAttemptedLimited,
+      limitedProviders,
+      providersTried
+    });
+  }
+
   const error = new Error(lastError?.message || "No configured AI detector provider is available.");
   error.statusCode = lastError?.statusCode || 502;
   error.provider = lastError?.provider || "unknown";
   error.reason = allAttemptedLimited ? "all_providers_limited" : lastError?.reason || "provider_unavailable";
   error.providersTried = providersTried;
   throw error;
+}
+
+function logProviderQuotaLimit({ filename, allAttemptedLimited, limitedProviders, providersTried }) {
+  const payload = {
+    event: "provider_quota_limit",
+    timestamp: new Date().toISOString(),
+    filename,
+    allAttemptedLimited,
+    limitedProviders: limitedProviders.map((item) => ({
+      provider: item.provider,
+      reason: item.reason,
+      message: item.message
+    })),
+    providersTried: providersTried.map((item) => ({
+      provider: item.provider,
+      status: item.status,
+      reason: item.reason || null
+    }))
+  };
+
+  console.warn("[PICCHECK_PROVIDER_QUOTA_LIMIT]", JSON.stringify(payload));
 }
 
 const providerAdapters = {
