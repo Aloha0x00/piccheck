@@ -404,6 +404,54 @@
       </div>
     </dialog>
 
+    <aside class="support-bot is-collapsed" id="supportBot" aria-live="polite">
+      <button class="support-bot-toggle" id="supportBotToggle" type="button" aria-label="Open support" aria-expanded="false">
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M7 8h10" />
+          <path d="M8 13h6" />
+          <path d="M20 11a7 7 0 0 1-7 7H8l-4 3v-3.7A7 7 0 1 1 20 11Z" />
+        </svg>
+      </button>
+      <div class="support-bot-card">
+        <div class="support-bot-head">
+          <div class="support-bot-identity">
+            <span class="support-bot-avatar" aria-hidden="true">
+              <svg viewBox="0 0 24 24">
+                <path d="M12 8V5" />
+                <path d="M8 5h8" />
+                <rect x="5" y="8" width="14" height="11" rx="4" />
+                <path d="M9 13h.01" />
+                <path d="M15 13h.01" />
+                <path d="M10 16h4" />
+              </svg>
+            </span>
+            <div>
+              <strong data-i18n="supportBotTitle">PIC Check support</strong>
+              <span data-i18n="supportBotStatus">Usually replies fast</span>
+            </div>
+          </div>
+          <button class="support-bot-minimize" id="supportBotMinimize" type="button" aria-label="Hide support">-</button>
+        </div>
+        <p data-i18n="supportBotBody">Need help with a scan result or API quota warning? Contact us directly.</p>
+        <div class="support-actions">
+          <a class="support-link support-email" href="mailto:johnlahboo@gmail.com?subject=PIC%20Check%20AI%20support">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 4h16v16H4z" />
+              <path d="m4 7 8 6 8-6" />
+            </svg>
+            <span data-i18n="supportEmail">Email support</span>
+          </a>
+          <a class="support-link support-telegram" href="https://t.me/movewannamove" target="_blank" rel="noopener">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="m21 3-7.5 18-4-8-7-3.5L21 3Z" />
+              <path d="m9.5 13 4.5-4.5" />
+            </svg>
+            <span data-i18n="supportTelegram">Chat on Telegram</span>
+          </a>
+        </div>
+      </div>
+    </aside>
+
     <script type="module" src="./app.js"></script>
   </body>
 </html>

@@ -49,10 +49,14 @@ const profileCloseButton = document.querySelector("#profileCloseButton");
 const profileHistory = document.querySelector("#profileHistory");
 const historyGridButton = document.querySelector("#historyGridButton");
 const historyListButton = document.querySelector("#historyListButton");
+const supportBot = document.querySelector("#supportBot");
+const supportBotToggle = document.querySelector("#supportBotToggle");
+const supportBotMinimize = document.querySelector("#supportBotMinimize");
 
 const MAX_MEMBER_IMAGES = 3;
 const MAX_GUEST_SCANS = 5;
 const GUEST_SCAN_COUNT_KEY = "pic-check-ai-guest-scan-count";
+const SUPPORT_BOT_STATE_KEY = "pic-check-ai-support-bot-state";
 const ANALYSIS_CACHE_PREFIX = "ai-media-risk-analysis:";
 const ANALYSIS_CACHE_TTL = 1000 * 60 * 60 * 24 * 7;
 const AI_THRESHOLD = 72;
@@ -178,6 +182,11 @@ const i18n = {
     supportBody: "Contact PIC Check support if you need help with scan results, account access, or quota warnings.",
     supportEmail: "Email support",
     supportTelegram: "Chat on Telegram",
+    supportBotTitle: "PIC Check support",
+    supportBotStatus: "Usually replies fast",
+    supportBotBody: "Need help with a scan result or API quota warning? Contact us directly.",
+    supportBotOpen: "Open support",
+    supportBotHide: "Hide support",
     authTitle: "Become a member",
     authBody: "Membership is completely free during the launch promo. Members can scan 3 images at once, continue after the 5-image guest limit, and keep scan history.",
     firebaseMissing: "Firebase is not configured yet. Add your Firebase config to enable sign-in.",
@@ -333,6 +342,11 @@ const i18n = {
     supportBody: "Liên hệ PIC Check nếu bạn cần hỗ trợ về kết quả scan, tài khoản hoặc cảnh báo quota API.",
     supportEmail: "Gửi email hỗ trợ",
     supportTelegram: "Chat qua Telegram",
+    supportBotTitle: "PIC Check support",
+    supportBotStatus: "Thường phản hồi nhanh",
+    supportBotBody: "Bạn cần hỗ trợ về kết quả scan hoặc cảnh báo quota API? Liên hệ trực tiếp với chúng tôi.",
+    supportBotOpen: "Mở hỗ trợ",
+    supportBotHide: "Ẩn hỗ trợ",
     authTitle: "Đăng ký member",
     authBody: "Đăng ký member hiện hoàn toàn FREE trong giai đoạn khuyến mãi. Member scan 3 ảnh cùng lúc, tiếp tục sau giới hạn 5 ảnh của guest và lưu lịch sử scan.",
     firebaseMissing: "Chưa cấu hình Firebase. Hãy thêm Firebase config để bật đăng nhập.",
@@ -753,6 +767,7 @@ function initialize() {
   applyLocale();
   bindEvents();
   initializeFirebase();
+  restoreSupportBotState();
   renderSelection();
 }
 
@@ -821,6 +836,21 @@ function bindEvents() {
   historyGridButton.addEventListener("click", () => setHistoryView("grid"));
   historyListButton.addEventListener("click", () => setHistoryView("list"));
   googleSignInButton.addEventListener("click", () => signInWithProvider("google"));
+  supportBotToggle.addEventListener("click", () => setSupportBotOpen(true));
+  supportBotMinimize.addEventListener("click", () => setSupportBotOpen(false));
+}
+
+function restoreSupportBotState() {
+  setSupportBotOpen(localStorage.getItem(SUPPORT_BOT_STATE_KEY) === "open", false);
+}
+
+function setSupportBotOpen(isOpen, persist = true) {
+  supportBot.classList.toggle("is-open", isOpen);
+  supportBot.classList.toggle("is-collapsed", !isOpen);
+  supportBotToggle.setAttribute("aria-label", t("supportBotOpen"));
+  supportBotMinimize.setAttribute("aria-label", t("supportBotHide"));
+  supportBotToggle.setAttribute("aria-expanded", String(isOpen));
+  if (persist) localStorage.setItem(SUPPORT_BOT_STATE_KEY, isOpen ? "open" : "collapsed");
 }
 
 async function initializeFirebase() {
@@ -1820,10 +1850,16 @@ function applyLocale() {
     element.placeholder = t(element.dataset.i18nPlaceholder);
   });
   updateLegalLinks();
+  syncSupportBotLabels();
   firebaseStatus.textContent = t(state.firebase.ready ? "firebaseReady" : "firebaseMissing");
   renderMemberState();
   renderHistory(state.scanHistory);
   renderProfileHistory();
+}
+
+function syncSupportBotLabels() {
+  supportBotToggle.setAttribute("aria-label", t("supportBotOpen"));
+  supportBotMinimize.setAttribute("aria-label", t("supportBotHide"));
 }
 
 function updateLegalLinks() {
