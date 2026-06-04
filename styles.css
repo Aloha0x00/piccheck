@@ -2111,6 +2111,17 @@ dd {
     min-height: auto;
   }
 
+  .member-cta-pack {
+    padding-bottom: 0;
+  }
+
+  .member-benefits {
+    position: relative;
+    top: auto;
+    left: auto;
+    margin-top: 12px;
+  }
+
   .hero-visual {
     min-height: 390px;
   }

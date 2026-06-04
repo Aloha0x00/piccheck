@@ -195,6 +195,7 @@ const i18n = {
     authUnauthorizedDomain: "Google sign-in is blocked for this domain. Open the app with http://localhost:3000 or add this domain in Firebase Authentication > Settings > Authorized domains.",
     authPopupBlocked: "Google sign-in popup was blocked. Allow popups and try again.",
     authOperationNotAllowed: "Google provider is not enabled for this Firebase project.",
+    authRedirecting: "Opening Google sign-in...",
     selectedCount: "{count} image(s) selected",
     memberRequired: "Members can scan 3 images at once and more than 5 images total.",
     memberLimit: "Member benefits: scan 3 images at once and scan beyond the 5-image guest limit.",
@@ -355,6 +356,7 @@ const i18n = {
     authUnauthorizedDomain: "Google sign-in đang bị chặn cho domain này. Hãy mở app bằng http://localhost:3000 hoặc thêm domain này trong Firebase Authentication > Settings > Authorized domains.",
     authPopupBlocked: "Popup đăng nhập Google bị chặn. Hãy cho phép popup rồi thử lại.",
     authOperationNotAllowed: "Google provider chưa được bật cho Firebase project này.",
+    authRedirecting: "Đang mở đăng nhập Google...",
     selectedCount: "Đã chọn {count} ảnh",
     memberRequired: "Member có thể scan 3 ảnh cùng lúc và scan nhiều hơn 5 ảnh.",
     memberLimit: "Lợi ích member: scan 3 ảnh cùng lúc và scan vượt giới hạn 5 ảnh của guest.",
@@ -886,6 +888,8 @@ async function initializeFirebase() {
       fns: {
         onAuthStateChanged: firebaseAuth.onAuthStateChanged,
         signInWithPopup: firebaseAuth.signInWithPopup,
+        signInWithRedirect: firebaseAuth.signInWithRedirect,
+        getRedirectResult: firebaseAuth.getRedirectResult,
         signOut: firebaseAuth.signOut,
         setDoc: firestore.setDoc,
         doc: firestore.doc,
@@ -915,6 +919,7 @@ async function initializeFirebase() {
       renderSelection();
     });
 
+    await completePendingRedirectSignIn();
     setFirebaseReady(true);
     trackEvent("app_loaded");
   } catch (error) {
@@ -1799,6 +1804,12 @@ async function signInWithProvider(providerName) {
 
   try {
     const provider = state.firebase.providers[providerName];
+    if (shouldUseRedirectSignIn()) {
+      firebaseStatus.textContent = t("authRedirecting");
+      await state.firebase.fns.signInWithRedirect(state.firebase.auth, provider);
+      return;
+    }
+
     await state.firebase.fns.signInWithPopup(state.firebase.auth, provider);
     trackEvent("login", { method: providerName });
     authDialog.close();
@@ -1806,6 +1817,22 @@ async function signInWithProvider(providerName) {
     console.warn("Provider sign-in failed:", error);
     firebaseStatus.textContent = describeAuthError(error);
   }
+}
+
+async function completePendingRedirectSignIn() {
+  try {
+    const result = await state.firebase.fns.getRedirectResult(state.firebase.auth);
+    if (!result?.user) return;
+    trackEvent("login", { method: "google_redirect" });
+    if (authDialog.open) authDialog.close();
+  } catch (error) {
+    console.warn("Redirect sign-in failed:", error);
+    firebaseStatus.textContent = describeAuthError(error);
+  }
+}
+
+function shouldUseRedirectSignIn() {
+  return window.matchMedia("(max-width: 680px)").matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
 }
 
 function describeAuthError(error) {
