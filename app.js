@@ -21,6 +21,8 @@ const confidence = document.querySelector("#confidence");
 const dimensions = document.querySelector("#dimensions");
 const fileSize = document.querySelector("#fileSize");
 const signals = document.querySelector("#signals");
+const downloadMarkedButton = document.querySelector("#downloadMarkedButton");
+const copyPiccheckLinkButton = document.querySelector("#copyPiccheckLinkButton");
 const languageSelect = document.querySelector("#languageSelect");
 const scanNavButton = document.querySelector("#scanNavButton");
 const profileNavButton = document.querySelector("#profileNavButton");
@@ -171,7 +173,18 @@ const i18n = {
     dimensions: "Dimensions",
     fileSize: "File size",
     signalsTitle: "Detection signals",
+    signalProvider: "Provider",
+    signalRule: "Rule",
+    signalScore: "Score",
+    signalVisualFactor: "Visual factor",
+    signalScreenshot: "Screenshot",
+    signalFormat: "Format",
+    signalOther: "Evidence",
     emptySignals: "Upload images to begin analysis.",
+    downloadMarkedImage: "Download marked image",
+    copyPiccheckLink: "Copy PIC Check link",
+    copiedLink: "Link copied",
+    copyFailed: "Could not copy link",
     historyTitle: "Scan history",
     historyGuest: "Sign in to save history.",
     historyEmpty: "No scans saved yet.",
@@ -341,7 +354,18 @@ const i18n = {
     dimensions: "Kích thước",
     fileSize: "Dung lượng",
     signalsTitle: "Tín hiệu phát hiện",
+    signalProvider: "Provider",
+    signalRule: "Quy tắc",
+    signalScore: "Điểm số",
+    signalVisualFactor: "Yếu tố thị giác",
+    signalScreenshot: "Screenshot",
+    signalFormat: "Định dạng",
+    signalOther: "Bằng chứng",
     emptySignals: "Upload ảnh để bắt đầu phân tích.",
+    downloadMarkedImage: "Tải ảnh có marker",
+    copyPiccheckLink: "Copy link PIC Check",
+    copiedLink: "Đã copy link",
+    copyFailed: "Không copy được link",
     historyTitle: "Lịch sử scan",
     historyGuest: "Đăng nhập để lưu lịch sử.",
     historyEmpty: "Chưa có lịch sử scan.",
@@ -727,7 +751,18 @@ Object.assign(i18n.zh, {
   legalFooterText: "使用 PIC Check AI 即表示你同意以下法律文件。",
   termsLink: "使用条款",
   conditionsLink: "条件",
-  legalLink: "法律声明"
+  legalLink: "法律声明",
+  signalProvider: "供应商",
+  signalRule: "规则",
+  signalScore: "分数",
+  signalVisualFactor: "视觉因素",
+  signalScreenshot: "截图",
+  signalFormat: "格式",
+  signalOther: "证据",
+  downloadMarkedImage: "下载带标记图片",
+  copyPiccheckLink: "复制 PIC Check 链接",
+  copiedLink: "链接已复制",
+  copyFailed: "无法复制链接"
 });
 
 Object.assign(i18n.hi, {
@@ -744,7 +779,18 @@ Object.assign(i18n.hi, {
   legalFooterText: "PIC Check AI का उपयोग करके आप नीचे दिए legal documents से सहमत होते हैं।",
   termsLink: "Terms of Use",
   conditionsLink: "Conditions",
-  legalLink: "Legal"
+  legalLink: "Legal",
+  signalProvider: "Provider",
+  signalRule: "Rule",
+  signalScore: "Score",
+  signalVisualFactor: "Visual factor",
+  signalScreenshot: "Screenshot",
+  signalFormat: "Format",
+  signalOther: "Evidence",
+  downloadMarkedImage: "Marked image डाउनलोड करें",
+  copyPiccheckLink: "PIC Check link copy करें",
+  copiedLink: "Link copied",
+  copyFailed: "Link copy नहीं हुआ"
 });
 
 Object.assign(i18n.es, {
@@ -761,7 +807,18 @@ Object.assign(i18n.es, {
   legalFooterText: "Al usar PIC Check AI aceptas los documentos legales siguientes.",
   termsLink: "Términos de uso",
   conditionsLink: "Condiciones",
-  legalLink: "Legal"
+  legalLink: "Legal",
+  signalProvider: "Proveedor",
+  signalRule: "Regla",
+  signalScore: "Puntuación",
+  signalVisualFactor: "Factor visual",
+  signalScreenshot: "Captura",
+  signalFormat: "Formato",
+  signalOther: "Evidencia",
+  downloadMarkedImage: "Descargar imagen marcada",
+  copyPiccheckLink: "Copiar enlace PIC Check",
+  copiedLink: "Enlace copiado",
+  copyFailed: "No se pudo copiar"
 });
 
 Object.assign(i18n.ar, {
@@ -778,7 +835,18 @@ Object.assign(i18n.ar, {
   legalFooterText: "باستخدام PIC Check AI فأنت توافق على الوثائق القانونية أدناه.",
   termsLink: "شروط الاستخدام",
   conditionsLink: "الشروط",
-  legalLink: "قانوني"
+  legalLink: "قانوني",
+  signalProvider: "المزود",
+  signalRule: "القاعدة",
+  signalScore: "النتيجة",
+  signalVisualFactor: "عامل بصري",
+  signalScreenshot: "لقطة شاشة",
+  signalFormat: "الصيغة",
+  signalOther: "دليل",
+  downloadMarkedImage: "تنزيل الصورة بعلامة",
+  copyPiccheckLink: "نسخ رابط PIC Check",
+  copiedLink: "تم نسخ الرابط",
+  copyFailed: "تعذر نسخ الرابط"
 });
 
 initialize();
@@ -857,6 +925,8 @@ function bindEvents() {
   historyGridButton.addEventListener("click", () => setHistoryView("grid"));
   historyListButton.addEventListener("click", () => setHistoryView("list"));
   googleSignInButton.addEventListener("click", () => signInWithProvider("google"));
+  downloadMarkedButton.addEventListener("click", downloadMarkedImage);
+  copyPiccheckLinkButton.addEventListener("click", copyPiccheckLink);
   supportBotToggle.addEventListener("click", () => setSupportBotOpen(true));
   supportBotMinimize.addEventListener("click", () => setSupportBotOpen(false));
 }
@@ -1208,12 +1278,14 @@ function removeImage(id) {
 function resetLatestResult() {
   scoreRing.style.setProperty("--score", 0);
   scoreRing.style.setProperty("--ring-color", "var(--teal)");
+  scoreRing.dataset.level = "empty";
   scoreValue.textContent = "--%";
   verdict.textContent = t("emptyVerdict");
   confidence.textContent = "--";
   dimensions.textContent = "--";
   fileSize.textContent = "--";
   setSignals([t("emptySignals")]);
+  updateResultActions(false);
 }
 
 function renderSelection() {
@@ -1368,11 +1440,13 @@ function renderActiveItemResult() {
 
   scoreRing.style.setProperty("--score", 0);
   scoreRing.style.setProperty("--ring-color", "var(--teal)");
+  scoreRing.dataset.level = "empty";
   scoreValue.textContent = "--%";
   verdict.textContent = item.status || t("queued");
   confidence.textContent = "--";
   dimensions.textContent = "--";
   fileSize.textContent = formatBytes(item.file.size);
+  updateResultActions(false);
   setSignals([t("queued")]);
 }
 
@@ -1569,12 +1643,14 @@ function renderResult(result, features, file) {
   const ringColor = level === "ai" ? "var(--danger)" : level === "warning" ? "var(--amber)" : "var(--teal)";
   scoreRing.style.setProperty("--score", result.score);
   scoreRing.style.setProperty("--ring-color", ringColor);
+  scoreRing.dataset.level = level;
   scoreValue.textContent = `${result.score}%`;
   verdict.textContent = result.label;
   confidence.textContent = `${result.confidence}%`;
   dimensions.textContent = `${features.width} x ${features.height}`;
   fileSize.textContent = formatBytes(file.size);
   setSignals(result.notes);
+  updateResultActions(true);
 }
 
 function labelForScore(score) {
@@ -1735,12 +1811,14 @@ function showHistoryResult(item) {
   scoreRing.style.setProperty("--score", score);
   const level = riskLevelForScore(score);
   scoreRing.style.setProperty("--ring-color", level === "ai" ? "var(--danger)" : level === "warning" ? "var(--amber)" : "var(--teal)");
+  scoreRing.dataset.level = level;
   scoreValue.textContent = `${score}%`;
   verdict.textContent = labelForScore(score);
   confidence.textContent = `${Math.round(item.confidence || 0)}%`;
   dimensions.textContent = `${features.width} x ${features.height}`;
   fileSize.textContent = formatBytes(item.fileSize || 0);
   setSignals(Array.isArray(item.signals) && item.signals.length ? item.signals : [t("emptySignals")]);
+  updateResultActions(true);
 }
 
 function showPage(pageName) {
@@ -1954,13 +2032,169 @@ function setAnalyzeLoading(isLoading) {
   analyzeButton.querySelector("span").textContent = t(isLoading ? "scanning" : "scanImages");
 }
 
+function updateResultActions(enabled) {
+  downloadMarkedButton.disabled = !enabled;
+  copyPiccheckLinkButton.disabled = !enabled;
+}
+
+function currentResultContext() {
+  if (state.historyPreviewItem) {
+    const item = state.historyPreviewItem;
+    return {
+      imageSrc: item.imageDataUrl || item.thumbnailDataUrl,
+      filename: item.filename || "piccheck-result",
+      score: Math.round(item.score || 0)
+    };
+  }
+
+  const activeItem = getActiveItem();
+  if (!activeItem?.result) return null;
+
+  return {
+    imageSrc: activeItem.objectUrl,
+    filename: activeItem.file?.name || "piccheck-result",
+    score: Math.round(activeItem.result.score || 0)
+  };
+}
+
+async function downloadMarkedImage() {
+  const context = currentResultContext();
+  if (!context?.imageSrc) return;
+
+  const image = await loadImage(context.imageSrc);
+  const canvas = document.createElement("canvas");
+  const maxSide = 1800;
+  const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
+  canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
+  canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
+  const canvasContext = canvas.getContext("2d");
+  canvasContext.drawImage(image, 0, 0, canvas.width, canvas.height);
+  drawResultMarker(canvasContext, canvas, context.score);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png", 0.94));
+  if (!blob) return;
+
+  const link = document.createElement("a");
+  link.href = URL.createObjectURL(blob);
+  link.download = markedFilename(context.filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(link.href);
+}
+
+function drawResultMarker(canvasContext, canvas, score) {
+  const level = riskLevelForScore(score);
+  const color = level === "ai" ? "#f0323f" : level === "warning" ? "#d18a13" : "#1f9d55";
+  const text = markerTextForScore(score).toUpperCase();
+  const width = canvas.width * 0.72;
+  const height = Math.max(72, canvas.height * 0.14);
+  const x = canvas.width / 2;
+  const y = canvas.height / 2;
+
+  canvasContext.save();
+  canvasContext.translate(x, y);
+  canvasContext.rotate(-10 * Math.PI / 180);
+  canvasContext.strokeStyle = color;
+  canvasContext.lineWidth = Math.max(7, canvas.width * 0.012);
+  canvasContext.fillStyle = "rgba(255, 255, 255, 0.08)";
+  canvasContext.strokeRect(-width / 2, -height / 2, width, height);
+  canvasContext.fillRect(-width / 2, -height / 2, width, height);
+  canvasContext.fillStyle = color;
+  canvasContext.textAlign = "center";
+  canvasContext.textBaseline = "middle";
+  canvasContext.font = `900 ${fitCanvasText(canvasContext, text, width * 0.88, Math.max(30, height * 0.52))}px Arial, sans-serif`;
+  canvasContext.fillText(text, 0, 0);
+  canvasContext.restore();
+}
+
+function fitCanvasText(canvasContext, text, maxWidth, initialSize) {
+  let size = initialSize;
+  while (size > 18) {
+    canvasContext.font = `900 ${size}px Arial, sans-serif`;
+    if (canvasContext.measureText(text).width <= maxWidth) return size;
+    size -= 2;
+  }
+  return size;
+}
+
+function markedFilename(filename) {
+  const cleanName = String(filename || "image").replace(/\.[a-z0-9]+$/i, "").replace(/[^a-z0-9_-]+/gi, "-").replace(/^-+|-+$/g, "");
+  return `piccheck-${cleanName || "image"}-marked.png`;
+}
+
+async function copyPiccheckLink() {
+  const url = new URL(window.location.origin || "https://piccheck.vercel.app");
+  url.searchParams.set("utm_source", "scan_result");
+  url.searchParams.set("utm_medium", "share");
+  url.searchParams.set("utm_campaign", "piccheck_backlink");
+  url.hash = "scanner";
+
+  try {
+    await navigator.clipboard.writeText(url.toString());
+    flashActionText(copyPiccheckLinkButton, t("copiedLink"));
+  } catch {
+    flashActionText(copyPiccheckLinkButton, t("copyFailed"));
+  }
+}
+
+function flashActionText(button, text) {
+  const label = button.querySelector("span");
+  const original = label.textContent;
+  label.textContent = text;
+  window.setTimeout(() => {
+    label.textContent = original;
+  }, 1800);
+}
+
 function setSignals(items) {
   signals.innerHTML = "";
   items.forEach((item) => {
     const li = document.createElement("li");
-    li.textContent = item;
+    const { label, text } = signalDisplayParts(item);
+    li.innerHTML = `<span class="signal-label">${escapeHtml(label)}</span><span>${escapeHtml(text)}</span>`;
     signals.appendChild(li);
   });
+}
+
+function signalDisplayParts(item) {
+  const text = String(item || "");
+  const lower = text.toLowerCase();
+  const explicitLabelMatch = text.match(/^([^:：]{2,32})[:：]\s*(.+)$/);
+
+  if (explicitLabelMatch) {
+    const rawLabel = explicitLabelMatch[1].trim();
+    const labelLower = rawLabel.toLowerCase();
+    if (labelLower.includes("provider") || labelLower.includes("nguồn")) return { label: t("signalProvider"), text: explicitLabelMatch[2].trim() };
+    if (labelLower.includes("format") || labelLower.includes("định dạng")) return { label: t("signalFormat"), text: explicitLabelMatch[2].trim() };
+    return { label: rawLabel, text: explicitLabelMatch[2].trim() };
+  }
+
+  if (lower.includes("provider") || lower.includes("sightengine") || lower.includes("hive") || lower.includes("ai or not") || lower.includes("reality")) {
+    return { label: t("signalProvider"), text };
+  }
+
+  if (lower.includes("rule") || lower.includes("threshold") || lower.includes("quy tắc") || lower.includes("ngưỡng")) {
+    return { label: t("signalRule"), text };
+  }
+
+  if (lower.includes("score") || lower.includes("điểm")) {
+    return { label: t("signalScore"), text };
+  }
+
+  if (lower.includes("screenshot") || lower.includes("screen") || lower.includes("màn hình")) {
+    return { label: t("signalScreenshot"), text };
+  }
+
+  if (lower.includes("format") || lower.includes("định dạng")) {
+    return { label: t("signalFormat"), text };
+  }
+
+  if (lower.includes("smooth") || lower.includes("edge") || lower.includes("entropy") || lower.includes("saturation") || lower.includes("texture") || lower.includes("mượt") || lower.includes("cạnh") || lower.includes("bão hòa")) {
+    return { label: t("signalVisualFactor"), text };
+  }
+
+  return { label: t("signalOther"), text };
 }
 
 function t(key, vars = {}) {

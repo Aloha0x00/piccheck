@@ -272,7 +272,7 @@
         <aside class="side-panel" aria-live="polite">
           <section class="result-panel">
             <div class="score-wrap">
-              <div class="score-ring" id="scoreRing" style="--score: 0">
+              <div class="score-ring" id="scoreRing" style="--score: 0" data-level="empty">
                 <span id="scoreValue">--%</span>
               </div>
               <div>
@@ -295,6 +295,23 @@
                 <dd id="fileSize">--</dd>
               </div>
             </dl>
+
+            <div class="result-actions">
+              <button class="ghost-button result-action-button" id="downloadMarkedButton" type="button" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3v12m0 0 5-5m-5 5-5-5" />
+                  <path d="M5 19h14" />
+                </svg>
+                <span data-i18n="downloadMarkedImage">Download marked image</span>
+              </button>
+              <button class="ghost-button result-action-button" id="copyPiccheckLinkButton" type="button" disabled>
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M10 13a5 5 0 0 0 7.1.2l2.1-2.1a5 5 0 0 0-7.1-7.1L11 5" />
+                  <path d="M14 11a5 5 0 0 0-7.1-.2l-2.1 2.1a5 5 0 0 0 7.1 7.1L13 19" />
+                </svg>
+                <span data-i18n="copyPiccheckLink">Copy PIC Check link</span>
+              </button>
+            </div>
 
             <section class="evidence">
               <h3 data-i18n="signalsTitle">Detection signals</h3>
