@@ -4,7 +4,11 @@ const MAX_IMAGE_BYTES = 12 * 1024 * 1024;
 const DEFAULT_MODELS = "genai,type";
 const MAX_CACHE_ENTRIES = 200;
 const LIMIT_REASONS = new Set(["rate_limit", "quota", "limit", "usage"]);
+const QUOTA_ALERT_COOLDOWN_MS = Number(process.env.QUOTA_ALERT_COOLDOWN_MS || 30 * 60 * 1000);
+const QUOTA_USED_WARNING_THRESHOLD = Number(process.env.QUOTA_USED_WARNING_THRESHOLD || 0.9);
+const QUOTA_REMAINING_WARNING_THRESHOLD = Number(process.env.QUOTA_REMAINING_WARNING_THRESHOLD || 0.1);
 const responseCache = new Map();
+const alertCooldowns = new Map();
 
 export default async function handler(request, response) {
   if (request.method !== "POST") {
@@ -93,7 +97,7 @@ async function analyzeWithProviders(imagePayload, filename) {
   const allAttemptedLimited = attemptedProviders.length > 0 && attemptedProviders.length === limitedProviders.length;
 
   if (limitedProviders.length) {
-    logProviderQuotaLimit({
+    await logProviderQuotaLimit({
       filename,
       allAttemptedLimited,
       limitedProviders,
@@ -109,7 +113,7 @@ async function analyzeWithProviders(imagePayload, filename) {
   throw error;
 }
 
-function logProviderQuotaLimit({ filename, allAttemptedLimited, limitedProviders, providersTried }) {
+async function logProviderQuotaLimit({ filename, allAttemptedLimited, limitedProviders, providersTried }) {
   const payload = {
     event: "provider_quota_limit",
     timestamp: new Date().toISOString(),
@@ -128,6 +132,179 @@ function logProviderQuotaLimit({ filename, allAttemptedLimited, limitedProviders
   };
 
   console.warn("[PICCHECK_PROVIDER_QUOTA_LIMIT]", JSON.stringify(payload));
+  await sendTelegramAlert({
+    event: "provider_quota_limit",
+    provider: limitedProviders.map((item) => item.provider).join(", "),
+    reason: allAttemptedLimited ? "all_providers_limited" : "provider_limited",
+    message: [
+      "PIC Check API quota warning",
+      `Provider: ${limitedProviders.map((item) => item.provider).join(", ")}`,
+      `Reason: ${allAttemptedLimited ? "All attempted providers are limited" : "Provider limit detected"}`,
+      `File: ${filename}`,
+      `Providers tried: ${providersTried.map((item) => `${item.provider}:${item.status}${item.reason ? `/${item.reason}` : ""}`).join(", ")}`,
+      `Time: ${payload.timestamp}`
+    ].join("\n")
+  });
+}
+
+async function alertOnQuotaUsage(provider, response, raw, filename) {
+  const quota = extractQuotaInfo(response, raw);
+  if (!quota.warning) return;
+
+  const usedText = typeof quota.usedRatio === "number" ? `${Math.round(quota.usedRatio * 100)}% used` : null;
+  const remainingText = typeof quota.remainingRatio === "number" ? `${Math.round(quota.remainingRatio * 100)}% remaining` : null;
+  const detailText = [usedText, remainingText, quota.limit ? `limit=${quota.limit}` : null, quota.remaining ? `remaining=${quota.remaining}` : null]
+    .filter(Boolean)
+    .join(", ");
+
+  console.warn("[PICCHECK_PROVIDER_QUOTA_WARNING]", JSON.stringify({
+    event: "provider_quota_near_limit",
+    timestamp: new Date().toISOString(),
+    provider,
+    filename,
+    quota
+  }));
+
+  await sendTelegramAlert({
+    event: "provider_quota_near_limit",
+    provider,
+    reason: quota.reason,
+    message: [
+      "PIC Check API quota warning",
+      `Provider: ${provider}`,
+      `Reason: ${quota.reason}`,
+      `Quota: ${detailText || "near configured threshold"}`,
+      `File: ${filename}`,
+      `Time: ${new Date().toISOString()}`
+    ].join("\n")
+  });
+}
+
+function extractQuotaInfo(response, raw = {}) {
+  const values = {
+    ...quotaBodyValues(raw),
+    ...quotaHeaderValues(response)
+  };
+  const limit = firstNumber(values.limit, values.total);
+  const remaining = firstNumber(values.remaining);
+  const used = firstNumber(values.used, values.current, values.count);
+  const rawUsedRatio = firstNumber(values.usedRatio);
+  const rawRemainingRatio = firstNumber(values.remainingRatio);
+
+  let usedRatio = normalizeRatio(rawUsedRatio);
+  let remainingRatio = normalizeRatio(rawRemainingRatio);
+
+  if (typeof usedRatio !== "number" && typeof used === "number" && typeof limit === "number" && limit > 0) {
+    usedRatio = used / limit;
+  }
+
+  if (typeof remainingRatio !== "number" && typeof remaining === "number" && typeof limit === "number" && limit > 0) {
+    remainingRatio = remaining / limit;
+  }
+
+  if (typeof usedRatio !== "number" && typeof remainingRatio === "number") usedRatio = 1 - remainingRatio;
+  if (typeof remainingRatio !== "number" && typeof usedRatio === "number") remainingRatio = 1 - usedRatio;
+
+  const usedNearLimit = typeof usedRatio === "number" && usedRatio >= QUOTA_USED_WARNING_THRESHOLD;
+  const remainingNearLimit = typeof remainingRatio === "number" && remainingRatio <= QUOTA_REMAINING_WARNING_THRESHOLD;
+  const warning = usedNearLimit || remainingNearLimit;
+  const reason = usedNearLimit
+    ? `quota_used_${Math.round(usedRatio * 100)}pct`
+    : remainingNearLimit
+      ? `quota_remaining_${Math.round(remainingRatio * 100)}pct`
+      : "quota_ok";
+
+  return { warning, reason, limit, remaining, used, usedRatio, remainingRatio };
+}
+
+function quotaHeaderValues(response) {
+  if (!response?.headers) return {};
+  const get = (name) => parseQuotaNumber(response.headers.get(name));
+
+  return {
+    limit: firstNumber(
+      get("x-ratelimit-limit"),
+      get("x-rate-limit-limit"),
+      get("ratelimit-limit"),
+      get("x-quota-limit"),
+      get("x-usage-limit")
+    ),
+    remaining: firstNumber(
+      get("x-ratelimit-remaining"),
+      get("x-rate-limit-remaining"),
+      get("ratelimit-remaining"),
+      get("x-quota-remaining"),
+      get("x-usage-remaining")
+    ),
+    used: firstNumber(
+      get("x-ratelimit-used"),
+      get("x-rate-limit-used"),
+      get("x-quota-used"),
+      get("x-usage-used")
+    )
+  };
+}
+
+function quotaBodyValues(raw) {
+  const values = {};
+
+  visit(raw, (value, key) => {
+    if (!key || typeof value !== "number") return;
+    const normalizedKey = String(key).toLowerCase().replace(/[_\s-]/g, "");
+    if (!normalizedKey.includes("quota") && !normalizedKey.includes("usage") && !normalizedKey.includes("limit") && !normalizedKey.includes("remaining")) return;
+
+    if (normalizedKey.includes("remaining")) values.remaining = firstNumber(values.remaining, value);
+    else if (normalizedKey.includes("used") || normalizedKey.includes("usage") || normalizedKey.includes("current") || normalizedKey.includes("count")) values.used = firstNumber(values.used, value);
+    else if (normalizedKey.includes("limit") || normalizedKey.includes("quota") || normalizedKey.includes("total")) values.limit = firstNumber(values.limit, value);
+
+    if (normalizedKey.includes("percent") || normalizedKey.includes("ratio")) {
+      if (normalizedKey.includes("remaining")) values.remainingRatio = firstNumber(values.remainingRatio, value);
+      else values.usedRatio = firstNumber(values.usedRatio, value);
+    }
+  });
+
+  return values;
+}
+
+function parseQuotaNumber(value) {
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const match = value.match(/\d+(?:\.\d+)?/);
+  return match ? Number(match[0]) : undefined;
+}
+
+function normalizeRatio(value) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return value > 1 ? value / 100 : value;
+}
+
+async function sendTelegramAlert({ event, provider, reason, message }) {
+  const token = process.env.TELEGRAM_BOT_TOKEN;
+  const chatId = process.env.TELEGRAM_CHAT_ID;
+  if (!token || !chatId) return;
+
+  const cooldownKey = `${event}:${provider}:${reason}`;
+  const now = Date.now();
+  const lastSentAt = alertCooldowns.get(cooldownKey) || 0;
+  if (now - lastSentAt < QUOTA_ALERT_COOLDOWN_MS) return;
+  alertCooldowns.set(cooldownKey, now);
+
+  try {
+    const telegramResponse = await fetch(`https://api.telegram.org/bot${token}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        disable_web_page_preview: true
+      })
+    });
+
+    if (!telegramResponse.ok) {
+      console.warn("[PICCHECK_TELEGRAM_ALERT_FAILED]", telegramResponse.status, await telegramResponse.text());
+    }
+  } catch (error) {
+    console.warn("[PICCHECK_TELEGRAM_ALERT_FAILED]", error);
+  }
 }
 
 const providerAdapters = {
@@ -147,6 +324,7 @@ const providerAdapters = {
         body: form
       });
       const raw = await sightengineResponse.json();
+      await alertOnQuotaUsage("sightengine", sightengineResponse, raw, filename);
 
       if (!sightengineResponse.ok || raw.status === "failure") {
         throw providerError({
@@ -177,6 +355,7 @@ const providerAdapters = {
         body: form
       });
       const raw = await hiveResponse.json();
+      await alertOnQuotaUsage("hive", hiveResponse, raw, filename);
 
       if (!hiveResponse.ok || raw.status?.code >= 400) {
         throw providerError({
@@ -207,6 +386,7 @@ const providerAdapters = {
         body: form
       });
       const raw = await aiornotResponse.json();
+      await alertOnQuotaUsage("aiornot", aiornotResponse, raw, filename);
 
       if (!aiornotResponse.ok) {
         throw providerError({
@@ -237,6 +417,7 @@ const providerAdapters = {
         body: form
       });
       const raw = await realityResponse.json();
+      await alertOnQuotaUsage("realityai", realityResponse, raw, filename);
 
       if (!realityResponse.ok) {
         throw providerError({
@@ -399,16 +580,16 @@ function topGenerator(generatorScores) {
   return candidates[0] || null;
 }
 
-function visit(value, callback) {
-  callback(value);
+function visit(value, callback, key = "") {
+  callback(value, key);
 
   if (Array.isArray(value)) {
-    value.forEach((item) => visit(item, callback));
+    value.forEach((item, index) => visit(item, callback, String(index)));
     return;
   }
 
   if (value && typeof value === "object") {
-    Object.values(value).forEach((item) => visit(item, callback));
+    Object.entries(value).forEach(([entryKey, item]) => visit(item, callback, entryKey));
   }
 }
 
