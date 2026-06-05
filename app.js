@@ -57,6 +57,7 @@ const MAX_MEMBER_IMAGES = 3;
 const MAX_GUEST_SCANS = 5;
 const GUEST_SCAN_COUNT_KEY = "pic-check-ai-guest-scan-count";
 const SUPPORT_BOT_STATE_KEY = "pic-check-ai-support-bot-state";
+const REDIRECT_SIGN_IN_PENDING_KEY = "pic-check-ai-redirect-sign-in-pending";
 const ANALYSIS_CACHE_PREFIX = "ai-media-risk-analysis:";
 const ANALYSIS_CACHE_TTL = 1000 * 60 * 60 * 24 * 7;
 const AI_THRESHOLD = 72;
@@ -120,6 +121,15 @@ const i18n = {
     featureThreeTitle: "Member history",
     featureThreeBody: "Member scan history is saved so users can review previous checks anytime and avoid losing important results.",
     iconCredit: "Icon style reference: Iconfinder free AI icon pack by Eucalyp Studio.",
+    workflowEyebrow: "How to use PIC Check",
+    workflowTitle: "Scan images in 3 simple steps",
+    workflowBody: "Follow this flow to choose images, run analysis and read the visual result with detailed reasons.",
+    workflowStepOneTitle: "Choose images",
+    workflowStepOneBody: "Upload from your device or drag images into the highlighted drop area. Members can select up to 3 images.",
+    workflowStepTwoTitle: "Click to Scan",
+    workflowStepTwoBody: "After the preview appears, press the scan button on the selected image or toolbar to start analysis.",
+    workflowStepThreeTitle: "Check the result",
+    workflowStepThreeBody: "Review the stamp, score and detection signals to understand why the image is real, suspicious or AI-generated.",
     faqEyebrow: "FAQ",
     faqTitle: "Questions before you trust the score",
     faqOneQuestion: "Is the result a legal or forensic conclusion?",
@@ -281,6 +291,15 @@ const i18n = {
     featureThreeTitle: "Lịch sử member",
     featureThreeBody: "Lịch sử scan được lưu lại để user có thể tra cứu bất cứ lúc nào và không bị mất các kết quả quan trọng.",
     iconCredit: "Tham khảo style icon: bộ AI icon free trên Iconfinder của Eucalyp Studio.",
+    workflowEyebrow: "Cách dùng PIC Check",
+    workflowTitle: "Scan ảnh trong 3 bước đơn giản",
+    workflowBody: "Làm theo workflow này để chọn ảnh, chạy phân tích và đọc kết quả có stamp cùng lý do chi tiết.",
+    workflowStepOneTitle: "Chọn ảnh",
+    workflowStepOneBody: "Upload từ thiết bị hoặc kéo ảnh vào khung drop được highlight. Member có thể chọn tối đa 3 ảnh.",
+    workflowStepTwoTitle: "Bấm Click to Scan",
+    workflowStepTwoBody: "Sau khi ảnh preview xuất hiện, bấm nút scan trên ảnh đang chọn hoặc trên toolbar để bắt đầu phân tích.",
+    workflowStepThreeTitle: "Kiểm tra kết quả",
+    workflowStepThreeBody: "Xem stamp, điểm số và các tín hiệu phát hiện để hiểu vì sao ảnh là thật, nghi vấn chỉnh sửa hoặc AI-generated.",
     faqEyebrow: "FAQ",
     faqTitle: "Những điều cần biết trước khi tin vào điểm số",
     faqOneQuestion: "Kết quả có phải kết luận pháp lý hoặc forensic không?",
@@ -873,6 +892,7 @@ async function initializeFirebase() {
 
     const app = firebaseApp.initializeApp(firebaseConfig);
     const auth = firebaseAuth.getAuth(app);
+    await firebaseAuth.setPersistence(auth, firebaseAuth.browserLocalPersistence);
     const db = firestore.getFirestore(app);
     const analytics = firebaseConfig.measurementId ? analyticsModule.getAnalytics(app) : null;
 
@@ -890,6 +910,8 @@ async function initializeFirebase() {
         signInWithPopup: firebaseAuth.signInWithPopup,
         signInWithRedirect: firebaseAuth.signInWithRedirect,
         getRedirectResult: firebaseAuth.getRedirectResult,
+        setPersistence: firebaseAuth.setPersistence,
+        browserLocalPersistence: firebaseAuth.browserLocalPersistence,
         signOut: firebaseAuth.signOut,
         setDoc: firestore.setDoc,
         doc: firestore.doc,
@@ -906,17 +928,9 @@ async function initializeFirebase() {
     };
 
     state.firebase.fns.onAuthStateChanged(auth, async (user) => {
-      state.user = user;
-      renderMemberState();
-      if (user) {
-        await saveMarketingMember(user);
-        await loadScanHistory();
-      } else {
-        state.scanHistory = [];
-        renderHistory([]);
-        renderProfileHistory();
-      }
-      renderSelection();
+      const hadPendingRedirect = localStorage.getItem(REDIRECT_SIGN_IN_PENDING_KEY) === "1";
+      if (user && hadPendingRedirect) localStorage.removeItem(REDIRECT_SIGN_IN_PENDING_KEY);
+      await hydrateSignedInUser(user, { showProfile: Boolean(user && hadPendingRedirect) });
     });
 
     await completePendingRedirectSignIn();
@@ -1796,6 +1810,23 @@ function openAuthDialog() {
   authDialog.showModal();
 }
 
+async function hydrateSignedInUser(user, options = {}) {
+  state.user = user || null;
+  renderMemberState();
+
+  if (user) {
+    await saveMarketingMember(user);
+    await loadScanHistory();
+    if (options.showProfile) showPage("profile");
+  } else {
+    state.scanHistory = [];
+    renderHistory([]);
+    renderProfileHistory();
+  }
+
+  renderSelection();
+}
+
 async function signInWithProvider(providerName) {
   if (!state.firebase.ready) {
     firebaseStatus.textContent = t("firebaseNotReady");
@@ -1804,35 +1835,54 @@ async function signInWithProvider(providerName) {
 
   try {
     const provider = state.firebase.providers[providerName];
-    if (shouldUseRedirectSignIn()) {
-      firebaseStatus.textContent = t("authRedirecting");
-      await state.firebase.fns.signInWithRedirect(state.firebase.auth, provider);
-      return;
-    }
-
     await state.firebase.fns.signInWithPopup(state.firebase.auth, provider);
+    await hydrateSignedInUser(state.firebase.auth.currentUser);
     trackEvent("login", { method: providerName });
+    showPage("profile");
     authDialog.close();
   } catch (error) {
     console.warn("Provider sign-in failed:", error);
+    if (shouldFallbackToRedirect(error)) {
+      try {
+        firebaseStatus.textContent = t("authRedirecting");
+        localStorage.setItem(REDIRECT_SIGN_IN_PENDING_KEY, "1");
+        await state.firebase.fns.signInWithRedirect(state.firebase.auth, state.firebase.providers[providerName]);
+      } catch (redirectError) {
+        console.warn("Redirect fallback failed:", redirectError);
+        localStorage.removeItem(REDIRECT_SIGN_IN_PENDING_KEY);
+        firebaseStatus.textContent = describeAuthError(redirectError);
+      }
+      return;
+    }
+
     firebaseStatus.textContent = describeAuthError(error);
   }
 }
 
 async function completePendingRedirectSignIn() {
+  const hadPendingRedirect = localStorage.getItem(REDIRECT_SIGN_IN_PENDING_KEY) === "1";
   try {
     const result = await state.firebase.fns.getRedirectResult(state.firebase.auth);
-    if (!result?.user) return;
-    trackEvent("login", { method: "google_redirect" });
+    const user = result?.user || state.firebase.auth.currentUser;
+    if (!user) return;
+    localStorage.removeItem(REDIRECT_SIGN_IN_PENDING_KEY);
+    await hydrateSignedInUser(user, { showProfile: hadPendingRedirect });
+    trackEvent("login", { method: result?.user ? "google_redirect" : "google_redirect_current_user" });
     if (authDialog.open) authDialog.close();
   } catch (error) {
     console.warn("Redirect sign-in failed:", error);
+    localStorage.removeItem(REDIRECT_SIGN_IN_PENDING_KEY);
     firebaseStatus.textContent = describeAuthError(error);
   }
 }
 
 function shouldUseRedirectSignIn() {
   return window.matchMedia("(max-width: 680px)").matches || /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+}
+
+function shouldFallbackToRedirect(error) {
+  const code = String(error?.code || "");
+  return code.includes("popup-blocked");
 }
 
 function describeAuthError(error) {
@@ -1845,6 +1895,7 @@ function describeAuthError(error) {
 
 async function signOutMember() {
   if (signOutConfirmDialog.open) signOutConfirmDialog.close();
+  localStorage.removeItem(REDIRECT_SIGN_IN_PENDING_KEY);
   if (state.firebase.ready) {
     await state.firebase.fns.signOut(state.firebase.auth);
   }

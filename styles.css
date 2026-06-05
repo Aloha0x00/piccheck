@@ -694,6 +694,92 @@ h1 {
   align-items: start;
 }
 
+.workflow-guide {
+  margin: 0 0 28px;
+  border: 1px solid rgba(15, 143, 134, 0.18);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(15, 143, 134, 0.08), rgba(242, 166, 66, 0.06)),
+    rgba(255, 255, 255, 0.94);
+  box-shadow: var(--shadow);
+  padding: 26px;
+}
+
+.workflow-guide .section-kicker {
+  display: grid;
+  gap: 8px;
+}
+
+.workflow-guide .section-kicker p:not(.eyebrow) {
+  max-width: 760px;
+  color: var(--muted);
+  line-height: 1.55;
+}
+
+.workflow-steps {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 22px;
+}
+
+.workflow-steps article {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 18px 44px rgba(17, 29, 29, 0.1);
+}
+
+.workflow-steps img {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1.42;
+  background: #eef5f4;
+  border-bottom: 1px solid rgba(15, 143, 134, 0.12);
+  object-fit: contain;
+  object-position: top center;
+}
+
+.workflow-steps article:nth-child(3) img {
+  object-position: top left;
+}
+
+.workflow-steps article > div {
+  padding: 18px;
+}
+
+.workflow-steps strong {
+  display: block;
+  color: var(--text);
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.workflow-steps p {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.workflow-number {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  z-index: 1;
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 999px;
+  background: linear-gradient(135deg, var(--teal), #f2a642);
+  color: #ffffff;
+  font-weight: 950;
+  box-shadow: 0 10px 24px rgba(17, 29, 29, 0.18);
+}
+
 .faq-section {
   margin-top: 28px;
   padding: 26px;
@@ -2130,6 +2216,23 @@ dd {
     grid-template-columns: 1fr;
   }
 
+  .workflow-steps {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-steps article {
+    display: grid;
+    grid-template-columns: minmax(0, 0.95fr) minmax(280px, 0.75fr);
+    align-items: stretch;
+  }
+
+  .workflow-steps img {
+    height: 100%;
+    min-height: 230px;
+    border-right: 1px solid rgba(15, 143, 134, 0.12);
+    border-bottom: 0;
+  }
+
   .workspace {
     grid-template-columns: 1fr;
   }
@@ -2305,8 +2408,20 @@ dd {
   .result-panel,
   .history-panel,
   .disclaimer,
-  .support-panel {
+  .support-panel,
+  .workflow-guide {
     padding: 16px;
+  }
+
+  .workflow-steps article {
+    grid-template-columns: 1fr;
+  }
+
+  .workflow-steps img {
+    height: auto;
+    min-height: 0;
+    border-right: 0;
+    border-bottom: 1px solid rgba(15, 143, 134, 0.12);
   }
 
   .upload-hint {

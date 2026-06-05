@@ -1,5 +1,11 @@
 {
   "version": 2,
+  "rewrites": [
+    {
+      "source": "/__/auth/:path*",
+      "destination": "https://ai-generated-check.firebaseapp.com/__/auth/:path*"
+    }
+  ],
   "functions": {
     "api/analyze.js": {
       "maxDuration": 15
