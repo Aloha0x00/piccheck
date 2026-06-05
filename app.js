@@ -62,6 +62,7 @@ const SUPPORT_BOT_STATE_KEY = "pic-check-ai-support-bot-state";
 const REDIRECT_SIGN_IN_PENDING_KEY = "pic-check-ai-redirect-sign-in-pending";
 const ANALYSIS_CACHE_PREFIX = "ai-media-risk-analysis:";
 const ANALYSIS_CACHE_TTL = 1000 * 60 * 60 * 24 * 7;
+const PUBLIC_SHARE_ORIGIN = "https://piccheck.vercel.app";
 const AI_THRESHOLD = 72;
 const REAL_IMAGE_MAX_SCORE = 2;
 const HEIC_FORMATS = new Set(["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"]);
@@ -2097,26 +2098,27 @@ async function downloadMarkedImage() {
   const context = currentResultContext();
   if (!context?.imageSrc) return;
 
+  const markedImageDataUrl = await makeMarkedImageDataUrl(context, 1800);
+  if (!markedImageDataUrl) return;
+
+  const link = document.createElement("a");
+  link.href = markedImageDataUrl;
+  link.download = markedFilename(context.filename);
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+}
+
+async function makeMarkedImageDataUrl(context, maxSide = 1400) {
   const image = await loadImage(context.imageSrc);
   const canvas = document.createElement("canvas");
-  const maxSide = 1800;
   const scale = Math.min(1, maxSide / Math.max(image.naturalWidth, image.naturalHeight));
   canvas.width = Math.max(1, Math.round(image.naturalWidth * scale));
   canvas.height = Math.max(1, Math.round(image.naturalHeight * scale));
   const canvasContext = canvas.getContext("2d");
   canvasContext.drawImage(image, 0, 0, canvas.width, canvas.height);
   drawResultMarker(canvasContext, canvas, context.score);
-
-  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/png", 0.94));
-  if (!blob) return;
-
-  const link = document.createElement("a");
-  link.href = URL.createObjectURL(blob);
-  link.download = markedFilename(context.filename);
-  document.body.appendChild(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(link.href);
+  return canvas.toDataURL("image/png");
 }
 
 function drawResultMarker(canvasContext, canvas, score) {
@@ -2168,7 +2170,7 @@ async function copyPiccheckLink() {
 
   try {
     const picURL = await createSharedScan(context);
-    const url = new URL(window.location.origin || "https://piccheck.vercel.app");
+    const url = new URL(PUBLIC_SHARE_ORIGIN);
     url.pathname = `/pic/${picURL}`;
 
     await navigator.clipboard.writeText(url.toString());
@@ -2186,11 +2188,11 @@ async function createSharedScan(context) {
   if (!state.firebase.ready) throw new Error("Firebase is not ready.");
   const { db, fns, collections } = state.firebase;
   const picURL = createPublicPicSlug(context.filename);
-  const imageDataUrl = context.imageSrc?.startsWith("data:")
-    ? context.imageSrc
-    : context.file ? await makeStoredScanImage(context.file) : "";
+  const markedImageDataUrl = await makeMarkedImageDataUrl(context);
 
-  if (!imageDataUrl) throw new Error("Shared image is too large to store.");
+  if (!markedImageDataUrl || markedImageDataUrl.length > 950000) {
+    throw new Error("Shared image is too large to store.");
+  }
 
   await fns.setDoc(fns.doc(db, collections.sharedScans || "shared_scans", picURL), {
     picURL,
@@ -2203,7 +2205,7 @@ async function createSharedScan(context) {
     width: context.width || null,
     height: context.height || null,
     signals: context.signals || [],
-    imageDataUrl,
+    markedImageDataUrl,
     createdAtClient: new Date().toISOString(),
     createdAt: fns.serverTimestamp(),
     source: "piccheck_share"
@@ -2229,6 +2231,7 @@ async function loadSharedResultFromUrl() {
       id: snapshot.id,
       ...snapshot.data()
     };
+    item.imageDataUrl = item.imageDataUrl || item.markedImageDataUrl;
 
     if (!item.imageDataUrl) {
       setSignals([t("sharedResultMissing")]);
@@ -2260,7 +2263,7 @@ function createPublicPicSlug(filename) {
   const randomBytes = new Uint8Array(4);
   crypto.getRandomValues(randomBytes);
   const suffix = Array.from(randomBytes).map((value) => value.toString(16).padStart(2, "0")).join("");
-  return `${base}-${suffix}`;
+  return `${base}-marked-${suffix}.png`;
 }
 
 function flashActionText(button, text) {

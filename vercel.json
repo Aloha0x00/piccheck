@@ -7,12 +7,15 @@
     },
     {
       "source": "/pic/:path*",
-      "destination": "/index.html"
+      "destination": "/api/pic?slug=:path*"
     }
   ],
   "functions": {
     "api/analyze.js": {
       "maxDuration": 15
+    },
+    "api/pic.js": {
+      "maxDuration": 10
     }
   }
 }

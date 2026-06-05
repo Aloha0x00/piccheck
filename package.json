@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "node dev-server.js",
-    "check": "node --check app.js && node --check api/analyze.js && node --check api/fetch-image.js && node --check dev-server.js"
+    "check": "node --check app.js && node --check api/analyze.js && node --check api/fetch-image.js && node --check api/pic.js && node --check dev-server.js"
   },
   "engines": {
     "node": ">=18"

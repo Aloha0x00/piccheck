@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from "node:fs";
 import { extname, join, normalize } from "node:path";
 import analyzeHandler from "./api/analyze.js";
 import fetchImageHandler from "./api/fetch-image.js";
+import picHandler from "./api/pic.js";
 
 const rootDir = process.cwd();
 const port = Number(process.env.PORT || 3000);
@@ -20,6 +21,10 @@ const server = createServer(async (request, response) => {
 
   if (url.pathname === "/api/fetch-image") {
     return fetchImageHandler(request, response);
+  }
+
+  if (url.pathname === "/api/pic" || url.pathname.startsWith("/pic/")) {
+    return picHandler(request, response);
   }
 
   try {
@@ -60,7 +65,7 @@ function loadLocalEnv() {
 }
 
 function getStaticPath(pathname) {
-  const cleanPath = pathname === "/" || pathname.startsWith("/pic/") ? "/index.html" : pathname;
+  const cleanPath = pathname === "/" ? "/index.html" : pathname;
   const safePath = normalize(cleanPath).replace(/^(\.\.(\/|\\|$))+/, "");
   return join(rootDir, safePath);
 }
