@@ -23,6 +23,9 @@ const fileSize = document.querySelector("#fileSize");
 const signals = document.querySelector("#signals");
 const downloadMarkedButton = document.querySelector("#downloadMarkedButton");
 const copyPiccheckLinkButton = document.querySelector("#copyPiccheckLinkButton");
+const shareLinkBox = document.querySelector("#shareLinkBox");
+const shareLinkInput = document.querySelector("#shareLinkInput");
+const shareLinkCopyButton = document.querySelector("#shareLinkCopyButton");
 const languageSelect = document.querySelector("#languageSelect");
 const scanNavButton = document.querySelector("#scanNavButton");
 const profileNavButton = document.querySelector("#profileNavButton");
@@ -63,6 +66,7 @@ const REDIRECT_SIGN_IN_PENDING_KEY = "pic-check-ai-redirect-sign-in-pending";
 const ANALYSIS_CACHE_PREFIX = "ai-media-risk-analysis:";
 const ANALYSIS_CACHE_TTL = 1000 * 60 * 60 * 24 * 7;
 const PUBLIC_SHARE_ORIGIN = "https://piccheck.vercel.app";
+const MAX_SHARED_IMAGE_DATA_URL_LENGTH = 880000;
 const AI_THRESHOLD = 72;
 const REAL_IMAGE_MAX_SCORE = 2;
 const HEIC_FORMATS = new Set(["image/heic", "image/heif", "image/heic-sequence", "image/heif-sequence"]);
@@ -187,6 +191,13 @@ const i18n = {
     creatingShareLink: "Creating link...",
     copiedLink: "Link copied",
     copyFailed: "Could not copy link",
+    shareLinkReady: "Image link ready",
+    copyAgain: "Copy again",
+    manualCopyHint: "Link ready. Copy it from the field below.",
+    signInToCopyLink: "Sign in to copy image links.",
+    sharePermissionDenied: "Firestore permission denied. Allow signed-in members to create shared image links.",
+    shareImageTooLarge: "The marked image is too large to create a share link.",
+    shareFirebaseUnavailable: "Firebase is not ready yet.",
     sharedResultLoaded: "Shared scan result loaded.",
     sharedResultMissing: "This shared scan link is unavailable or expired.",
     historyTitle: "Scan history",
@@ -371,6 +382,13 @@ const i18n = {
     creatingShareLink: "Đang tạo link...",
     copiedLink: "Đã copy link",
     copyFailed: "Không copy được link",
+    shareLinkReady: "Link ảnh đã sẵn sàng",
+    copyAgain: "Copy lại",
+    manualCopyHint: "Link đã sẵn sàng. Hãy copy từ ô bên dưới.",
+    signInToCopyLink: "Đăng nhập member để copy link ảnh.",
+    sharePermissionDenied: "Firestore đang chặn quyền tạo link. Hãy cho member đã đăng nhập tạo shared image link.",
+    shareImageTooLarge: "Ảnh đã mark quá lớn nên không tạo được link share.",
+    shareFirebaseUnavailable: "Firebase chưa sẵn sàng.",
     sharedResultLoaded: "Đã tải kết quả scan được chia sẻ.",
     sharedResultMissing: "Link scan được chia sẻ không tồn tại hoặc đã hết hạn.",
     historyTitle: "Lịch sử scan",
@@ -946,6 +964,7 @@ function bindEvents() {
   googleSignInButton.addEventListener("click", () => signInWithProvider("google"));
   downloadMarkedButton.addEventListener("click", downloadMarkedImage);
   copyPiccheckLinkButton.addEventListener("click", copyPiccheckLink);
+  shareLinkCopyButton.addEventListener("click", copyVisibleShareLink);
   supportBotToggle.addEventListener("click", () => setSupportBotOpen(true));
   supportBotMinimize.addEventListener("click", () => setSupportBotOpen(false));
 }
@@ -1924,6 +1943,7 @@ async function hydrateSignedInUser(user, options = {}) {
   }
 
   renderSelection();
+  updateResultActions(Boolean(currentResultContext()));
 }
 
 async function signInWithProvider(providerName) {
@@ -2005,6 +2025,7 @@ async function signOutMember() {
   renderProfileHistory();
   showPage("scan");
   renderSelection();
+  updateResultActions(Boolean(currentResultContext()));
 }
 
 function trackEvent(name, params = {}) {
@@ -2055,7 +2076,9 @@ function setAnalyzeLoading(isLoading) {
 
 function updateResultActions(enabled) {
   downloadMarkedButton.disabled = !enabled;
-  copyPiccheckLinkButton.disabled = !enabled;
+  copyPiccheckLinkButton.disabled = !enabled || !state.user;
+  copyPiccheckLinkButton.title = !state.user && enabled ? t("signInToCopyLink") : "";
+  if (!enabled) hideShareLink();
 }
 
 function currentResultContext() {
@@ -2121,6 +2144,14 @@ async function makeMarkedImageDataUrl(context, maxSide = 1400) {
   return canvas.toDataURL("image/png");
 }
 
+async function makeShareMarkedImageDataUrl(context) {
+  for (const maxSide of [1200, 1000, 820, 680, 540]) {
+    const dataUrl = await makeMarkedImageDataUrl(context, maxSide);
+    if (dataUrl.length <= MAX_SHARED_IMAGE_DATA_URL_LENGTH) return dataUrl;
+  }
+  return "";
+}
+
 function drawResultMarker(canvasContext, canvas, score) {
   const level = riskLevelForScore(score);
   const color = level === "ai" ? "#f0323f" : level === "warning" ? "#d18a13" : "#1f9d55";
@@ -2162,6 +2193,12 @@ function markedFilename(filename) {
 }
 
 async function copyPiccheckLink() {
+  if (!state.user) {
+    openAuthDialog();
+    setSignals([t("signInToCopyLink")]);
+    return;
+  }
+
   const context = currentResultContext();
   if (!context) return;
 
@@ -2172,15 +2209,87 @@ async function copyPiccheckLink() {
     const picURL = await createSharedScan(context);
     const url = new URL(PUBLIC_SHARE_ORIGIN);
     url.pathname = `/pic/${picURL}`;
+    const shareUrl = url.toString();
 
-    await navigator.clipboard.writeText(url.toString());
-    flashActionText(copyPiccheckLinkButton, t("copiedLink"));
+    showShareLink(shareUrl);
+    const copied = await copyTextToClipboard(shareUrl);
+    flashActionText(copyPiccheckLinkButton, copied ? t("copiedLink") : t("manualCopyHint"));
     trackEvent("share_link_copied", { score: context.score, risk_level: riskLevelForScore(context.score) });
   } catch (error) {
     console.warn("Could not create share link:", error);
-    flashActionText(copyPiccheckLinkButton, t("copyFailed"));
+    const message = shareFailureMessage(error);
+    flashActionText(copyPiccheckLinkButton, message);
+    setSignals([message]);
   } finally {
-    copyPiccheckLinkButton.disabled = !currentResultContext();
+    copyPiccheckLinkButton.disabled = !currentResultContext() || !state.user;
+  }
+}
+
+function shareFailureMessage(error) {
+  const code = String(error?.code || "");
+  const message = String(error?.message || "");
+  if (code.includes("permission-denied") || message.toLowerCase().includes("permission")) {
+    return t("sharePermissionDenied");
+  }
+  if (message.toLowerCase().includes("too large")) {
+    return t("shareImageTooLarge");
+  }
+  if (!state.firebase.ready) {
+    return t("shareFirebaseUnavailable");
+  }
+  return `${t("copyFailed")}: ${message || "unknown error"}`;
+}
+
+async function copyVisibleShareLink() {
+  const value = shareLinkInput.value;
+  if (!value) return;
+  shareLinkInput.focus();
+  shareLinkInput.select();
+  shareLinkInput.setSelectionRange(0, value.length);
+  const copied = await copyTextToClipboard(value);
+  flashActionText(shareLinkCopyButton, copied ? t("copiedLink") : t("manualCopyHint"));
+}
+
+function showShareLink(value) {
+  shareLinkInput.value = value;
+  shareLinkBox.classList.remove("hidden");
+  shareLinkInput.focus();
+  shareLinkInput.select();
+  shareLinkInput.setSelectionRange(0, value.length);
+}
+
+function hideShareLink() {
+  shareLinkInput.value = "";
+  shareLinkBox.classList.add("hidden");
+}
+
+async function copyTextToClipboard(value) {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+  } catch (error) {
+    console.warn("Clipboard API unavailable:", error);
+  }
+
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.left = "-9999px";
+    textarea.style.top = "0";
+    document.body.appendChild(textarea);
+    textarea.focus();
+    textarea.select();
+    textarea.setSelectionRange(0, value.length);
+    const copied = document.execCommand("copy");
+    textarea.remove();
+    return copied;
+  } catch (error) {
+    console.warn("Clipboard fallback unavailable:", error);
+    return false;
   }
 }
 
@@ -2188,9 +2297,9 @@ async function createSharedScan(context) {
   if (!state.firebase.ready) throw new Error("Firebase is not ready.");
   const { db, fns, collections } = state.firebase;
   const picURL = createPublicPicSlug(context.filename);
-  const markedImageDataUrl = await makeMarkedImageDataUrl(context);
+  const markedImageDataUrl = await makeShareMarkedImageDataUrl(context);
 
-  if (!markedImageDataUrl || markedImageDataUrl.length > 950000) {
+  if (!markedImageDataUrl) {
     throw new Error("Shared image is too large to store.");
   }
 
@@ -2205,7 +2314,7 @@ async function createSharedScan(context) {
     width: context.width || null,
     height: context.height || null,
     signals: context.signals || [],
-    markedImageDataUrl,
+    imageDataUrl: markedImageDataUrl,
     createdAtClient: new Date().toISOString(),
     createdAt: fns.serverTimestamp(),
     source: "piccheck_share"

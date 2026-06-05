@@ -1,6 +1,6 @@
 import { firebaseConfig, firebaseCollections } from "../firebase-config.js";
 
-const MAX_IMAGE_DATA_URL_LENGTH = 950000;
+const MAX_IMAGE_DATA_URL_LENGTH = 900000;
 
 export default async function handler(request, response) {
   if (request.method !== "GET" && request.method !== "HEAD") {
@@ -55,7 +55,7 @@ async function loadMarkedImageDataUrl(slug) {
   }
 
   const payload = await firestoreResponse.json();
-  const imageDataUrl = payload.fields?.markedImageDataUrl?.stringValue || payload.fields?.imageDataUrl?.stringValue || "";
+  const imageDataUrl = payload.fields?.imageDataUrl?.stringValue || payload.fields?.markedImageDataUrl?.stringValue || "";
 
   if (!imageDataUrl || imageDataUrl.length > MAX_IMAGE_DATA_URL_LENGTH) {
     throw httpError(404, "Image not found");
