@@ -183,8 +183,11 @@ const i18n = {
     emptySignals: "Upload images to begin analysis.",
     downloadMarkedImage: "Download marked image",
     copyPiccheckLink: "Copy PIC Check link",
+    creatingShareLink: "Creating link...",
     copiedLink: "Link copied",
     copyFailed: "Could not copy link",
+    sharedResultLoaded: "Shared scan result loaded.",
+    sharedResultMissing: "This shared scan link is unavailable or expired.",
     historyTitle: "Scan history",
     historyGuest: "Sign in to save history.",
     historyEmpty: "No scans saved yet.",
@@ -364,8 +367,11 @@ const i18n = {
     emptySignals: "Upload ảnh để bắt đầu phân tích.",
     downloadMarkedImage: "Tải ảnh có marker",
     copyPiccheckLink: "Copy link PIC Check",
+    creatingShareLink: "Đang tạo link...",
     copiedLink: "Đã copy link",
     copyFailed: "Không copy được link",
+    sharedResultLoaded: "Đã tải kết quả scan được chia sẻ.",
+    sharedResultMissing: "Link scan được chia sẻ không tồn tại hoặc đã hết hạn.",
     historyTitle: "Lịch sử scan",
     historyGuest: "Đăng nhập để lưu lịch sử.",
     historyEmpty: "Chưa có lịch sử scan.",
@@ -761,8 +767,11 @@ Object.assign(i18n.zh, {
   signalOther: "证据",
   downloadMarkedImage: "下载带标记图片",
   copyPiccheckLink: "复制 PIC Check 链接",
+  creatingShareLink: "正在创建链接...",
   copiedLink: "链接已复制",
-  copyFailed: "无法复制链接"
+  copyFailed: "无法复制链接",
+  sharedResultLoaded: "已加载共享扫描结果。",
+  sharedResultMissing: "此共享扫描链接不可用或已过期。"
 });
 
 Object.assign(i18n.hi, {
@@ -789,8 +798,11 @@ Object.assign(i18n.hi, {
   signalOther: "Evidence",
   downloadMarkedImage: "Marked image डाउनलोड करें",
   copyPiccheckLink: "PIC Check link copy करें",
+  creatingShareLink: "Link बनाया जा रहा है...",
   copiedLink: "Link copied",
-  copyFailed: "Link copy नहीं हुआ"
+  copyFailed: "Link copy नहीं हुआ",
+  sharedResultLoaded: "Shared scan result loaded.",
+  sharedResultMissing: "यह shared scan link unavailable या expired है।"
 });
 
 Object.assign(i18n.es, {
@@ -817,8 +829,11 @@ Object.assign(i18n.es, {
   signalOther: "Evidencia",
   downloadMarkedImage: "Descargar imagen marcada",
   copyPiccheckLink: "Copiar enlace PIC Check",
+  creatingShareLink: "Creando enlace...",
   copiedLink: "Enlace copiado",
-  copyFailed: "No se pudo copiar"
+  copyFailed: "No se pudo copiar",
+  sharedResultLoaded: "Resultado compartido cargado.",
+  sharedResultMissing: "Este enlace compartido no está disponible o expiró."
 });
 
 Object.assign(i18n.ar, {
@@ -845,8 +860,11 @@ Object.assign(i18n.ar, {
   signalOther: "دليل",
   downloadMarkedImage: "تنزيل الصورة بعلامة",
   copyPiccheckLink: "نسخ رابط PIC Check",
+  creatingShareLink: "جار إنشاء الرابط...",
   copiedLink: "تم نسخ الرابط",
-  copyFailed: "تعذر نسخ الرابط"
+  copyFailed: "تعذر نسخ الرابط",
+  sharedResultLoaded: "تم تحميل نتيجة الفحص المشتركة.",
+  sharedResultMissing: "رابط الفحص المشترك غير متاح أو منتهي."
 });
 
 initialize();
@@ -987,6 +1005,7 @@ async function initializeFirebase() {
         doc: firestore.doc,
         addDoc: firestore.addDoc,
         collection: firestore.collection,
+        getDoc: firestore.getDoc,
         query: firestore.query,
         where: firestore.where,
         orderBy: firestore.orderBy,
@@ -1005,6 +1024,7 @@ async function initializeFirebase() {
 
     await completePendingRedirectSignIn();
     setFirebaseReady(true);
+    await loadSharedResultFromUrl();
     trackEvent("app_loaded");
   } catch (error) {
     console.warn("Firebase unavailable:", error);
@@ -2043,17 +2063,33 @@ function currentResultContext() {
     return {
       imageSrc: item.imageDataUrl || item.thumbnailDataUrl,
       filename: item.filename || "piccheck-result",
-      score: Math.round(item.score || 0)
+      score: Math.round(item.score || 0),
+      confidence: Math.round(item.confidence || 0),
+      label: item.label || labelForScore(Math.round(item.score || 0)),
+      width: item.width || null,
+      height: item.height || null,
+      fileSize: item.fileSize || 0,
+      mimeType: item.mimeType || "image/jpeg",
+      signals: Array.isArray(item.signals) ? item.signals : []
     };
   }
 
   const activeItem = getActiveItem();
   if (!activeItem?.result) return null;
+  const features = activeItem.result.features || {};
 
   return {
     imageSrc: activeItem.objectUrl,
     filename: activeItem.file?.name || "piccheck-result",
-    score: Math.round(activeItem.result.score || 0)
+    score: Math.round(activeItem.result.score || 0),
+    confidence: Math.round(activeItem.result.confidence || 0),
+    label: activeItem.result.label || labelForScore(Math.round(activeItem.result.score || 0)),
+    width: features.width || null,
+    height: features.height || null,
+    fileSize: activeItem.file?.size || 0,
+    mimeType: activeItem.file?.type || "image/jpeg",
+    signals: Array.isArray(activeItem.result.notes) ? activeItem.result.notes : [],
+    file: activeItem.file
   };
 }
 
@@ -2124,26 +2160,99 @@ function markedFilename(filename) {
 }
 
 async function copyPiccheckLink() {
-  const url = new URL(window.location.origin || "https://piccheck.vercel.app");
-  url.searchParams.set("utm_source", "scan_result");
-  url.searchParams.set("utm_medium", "share");
-  url.searchParams.set("utm_campaign", "piccheck_backlink");
-  url.hash = "scanner";
+  const context = currentResultContext();
+  if (!context) return;
+
+  flashActionText(copyPiccheckLinkButton, t("creatingShareLink"));
+  copyPiccheckLinkButton.disabled = true;
 
   try {
+    const shareId = await createSharedScan(context);
+    const url = new URL(window.location.origin || "https://piccheck.vercel.app");
+    url.searchParams.set("share", shareId);
+    url.searchParams.set("utm_source", "scan_result");
+    url.searchParams.set("utm_medium", "share");
+    url.searchParams.set("utm_campaign", "piccheck_backlink");
+    url.hash = "scanner";
+
     await navigator.clipboard.writeText(url.toString());
     flashActionText(copyPiccheckLinkButton, t("copiedLink"));
-  } catch {
+    trackEvent("share_link_copied", { score: context.score, risk_level: riskLevelForScore(context.score) });
+  } catch (error) {
+    console.warn("Could not create share link:", error);
     flashActionText(copyPiccheckLinkButton, t("copyFailed"));
+  } finally {
+    copyPiccheckLinkButton.disabled = !currentResultContext();
+  }
+}
+
+async function createSharedScan(context) {
+  if (!state.firebase.ready) throw new Error("Firebase is not ready.");
+  const { db, fns, collections } = state.firebase;
+  const imageDataUrl = context.imageSrc?.startsWith("data:")
+    ? context.imageSrc
+    : context.file ? await makeStoredScanImage(context.file) : "";
+
+  if (!imageDataUrl) throw new Error("Shared image is too large to store.");
+
+  const docRef = await fns.addDoc(fns.collection(db, collections.sharedScans || "shared_scans"), {
+    filename: context.filename,
+    fileSize: context.fileSize || 0,
+    mimeType: context.mimeType || "image/jpeg",
+    score: context.score,
+    confidence: context.confidence || 0,
+    label: context.label || labelForScore(context.score),
+    width: context.width || null,
+    height: context.height || null,
+    signals: context.signals || [],
+    imageDataUrl,
+    createdAtClient: new Date().toISOString(),
+    createdAt: fns.serverTimestamp(),
+    source: "piccheck_share"
+  });
+
+  return docRef.id;
+}
+
+async function loadSharedResultFromUrl() {
+  const shareId = new URLSearchParams(window.location.search).get("share");
+  if (!shareId || !state.firebase.ready) return;
+
+  try {
+    const { db, fns, collections } = state.firebase;
+    const docRef = fns.doc(db, collections.sharedScans || "shared_scans", shareId);
+    const snapshot = await fns.getDoc(docRef);
+    if (!snapshot.exists()) {
+      setSignals([t("sharedResultMissing")]);
+      return;
+    }
+
+    const item = {
+      id: snapshot.id,
+      ...snapshot.data()
+    };
+
+    if (!item.imageDataUrl) {
+      setSignals([t("sharedResultMissing")]);
+      return;
+    }
+
+    showHistoryResult(item);
+    historyStatus.textContent = t("sharedResultLoaded");
+    trackEvent("share_link_opened", { score: Math.round(item.score || 0), risk_level: riskLevelForScore(item.score) });
+  } catch (error) {
+    console.warn("Could not load shared result:", error);
+    setSignals([t("sharedResultMissing")]);
   }
 }
 
 function flashActionText(button, text) {
   const label = button.querySelector("span");
-  const original = label.textContent;
+  if (!button._defaultLabel) button._defaultLabel = label.textContent;
+  window.clearTimeout(button._flashTimer);
   label.textContent = text;
-  window.setTimeout(() => {
-    label.textContent = original;
+  button._flashTimer = window.setTimeout(() => {
+    label.textContent = button._defaultLabel;
   }, 1800);
 }
 

@@ -10,5 +10,6 @@ export const firebaseConfig = {
 
 export const firebaseCollections = {
   marketingMembers: "marketing_members",
-  userScans: "scans"
+  userScans: "scans",
+  sharedScans: "shared_scans"
 };
