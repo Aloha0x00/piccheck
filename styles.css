@@ -69,10 +69,20 @@ select {
 }
 
 .topbar {
+  position: sticky;
+  top: 0;
+  z-index: 70;
   justify-content: space-between;
   gap: 18px;
   margin-bottom: 30px;
+  border: 1px solid rgba(15, 143, 134, 0.14);
+  border-radius: 10px;
+  background: rgba(248, 251, 250, 0.92);
+  box-shadow: 0 18px 48px rgba(17, 29, 29, 0.1);
+  padding: 10px 12px;
   flex-wrap: wrap;
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
 }
 
 .brand {
@@ -2393,6 +2403,8 @@ dd {
     display: grid;
     grid-template-columns: 1fr;
     align-items: stretch;
+    top: 0;
+    gap: 10px;
   }
 
   .brand {
@@ -2429,7 +2441,13 @@ dd {
 @media (max-width: 680px) {
   .app-shell {
     width: min(100vw - 24px, 1240px);
-    padding-top: 18px;
+    padding-top: 10px;
+  }
+
+  .topbar {
+    border-radius: 8px;
+    margin-bottom: 18px;
+    padding: 9px;
   }
 
   .landing-hero {
