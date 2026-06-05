@@ -60,7 +60,7 @@ function loadLocalEnv() {
 }
 
 function getStaticPath(pathname) {
-  const cleanPath = pathname === "/" ? "/index.html" : pathname;
+  const cleanPath = pathname === "/" || pathname.startsWith("/pic/") ? "/index.html" : pathname;
   const safePath = normalize(cleanPath).replace(/^(\.\.(\/|\\|$))+/, "");
   return join(rootDir, safePath);
 }

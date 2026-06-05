@@ -2167,13 +2167,9 @@ async function copyPiccheckLink() {
   copyPiccheckLinkButton.disabled = true;
 
   try {
-    const shareId = await createSharedScan(context);
+    const picURL = await createSharedScan(context);
     const url = new URL(window.location.origin || "https://piccheck.vercel.app");
-    url.searchParams.set("share", shareId);
-    url.searchParams.set("utm_source", "scan_result");
-    url.searchParams.set("utm_medium", "share");
-    url.searchParams.set("utm_campaign", "piccheck_backlink");
-    url.hash = "scanner";
+    url.pathname = `/pic/${picURL}`;
 
     await navigator.clipboard.writeText(url.toString());
     flashActionText(copyPiccheckLinkButton, t("copiedLink"));
@@ -2189,13 +2185,15 @@ async function copyPiccheckLink() {
 async function createSharedScan(context) {
   if (!state.firebase.ready) throw new Error("Firebase is not ready.");
   const { db, fns, collections } = state.firebase;
+  const picURL = createPublicPicSlug(context.filename);
   const imageDataUrl = context.imageSrc?.startsWith("data:")
     ? context.imageSrc
     : context.file ? await makeStoredScanImage(context.file) : "";
 
   if (!imageDataUrl) throw new Error("Shared image is too large to store.");
 
-  const docRef = await fns.addDoc(fns.collection(db, collections.sharedScans || "shared_scans"), {
+  await fns.setDoc(fns.doc(db, collections.sharedScans || "shared_scans", picURL), {
+    picURL,
     filename: context.filename,
     fileSize: context.fileSize || 0,
     mimeType: context.mimeType || "image/jpeg",
@@ -2211,16 +2209,16 @@ async function createSharedScan(context) {
     source: "piccheck_share"
   });
 
-  return docRef.id;
+  return picURL;
 }
 
 async function loadSharedResultFromUrl() {
-  const shareId = new URLSearchParams(window.location.search).get("share");
-  if (!shareId || !state.firebase.ready) return;
+  const picURL = getSharedPicURLFromLocation();
+  if (!picURL || !state.firebase.ready) return;
 
   try {
     const { db, fns, collections } = state.firebase;
-    const docRef = fns.doc(db, collections.sharedScans || "shared_scans", shareId);
+    const docRef = fns.doc(db, collections.sharedScans || "shared_scans", picURL);
     const snapshot = await fns.getDoc(docRef);
     if (!snapshot.exists()) {
       setSignals([t("sharedResultMissing")]);
@@ -2244,6 +2242,25 @@ async function loadSharedResultFromUrl() {
     console.warn("Could not load shared result:", error);
     setSignals([t("sharedResultMissing")]);
   }
+}
+
+function getSharedPicURLFromLocation() {
+  const pathMatch = window.location.pathname.match(/^\/pic\/([^/?#]+)/);
+  if (pathMatch) return decodeURIComponent(pathMatch[1]);
+  return new URLSearchParams(window.location.search).get("share");
+}
+
+function createPublicPicSlug(filename) {
+  const base = String(filename || "piccheck-result")
+    .replace(/\.[a-z0-9]+$/i, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 54) || "piccheck-result";
+  const randomBytes = new Uint8Array(4);
+  crypto.getRandomValues(randomBytes);
+  const suffix = Array.from(randomBytes).map((value) => value.toString(16).padStart(2, "0")).join("");
+  return `${base}-${suffix}`;
 }
 
 function flashActionText(button, text) {
